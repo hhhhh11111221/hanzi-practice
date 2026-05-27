@@ -325,7 +325,10 @@ function applyInitialRoute() {
     app.view = view;
   }
   if (view === "animation") app.animation = { char: params.get("char") || "学" };
-  if (view === "practice") createSession("quick");
+  if (view === "practice") {
+    const chars = normalizeChars(params.get("chars") || "");
+    createSession(chars.length ? "chars" : "quick", chars);
+  }
 }
 
 function prepareVoices() {
