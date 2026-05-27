@@ -50,20 +50,25 @@
 - `app.js` 内的 `CORE_STROKES` 只作为极早期兜底和拼音/基础笔画参考，不应再作为主要字库来源。
 - 笔顺动画的正确模型是：灰色显示全部未写笔画轮廓，黑色显示已写笔画，当前笔画根据 median 逐步揭示。
 - 练习页标准字预览也应使用 Hanzi Writer 轮廓 canvas，避免系统字体基线造成偏右、偏下、大小不一致。
-- 书写校验应先加载真实笔画数据，再比较笔画数量、类型和顺序；绝不能退回默认“三笔模板”。
+- 书写校验应先加载真实笔画数据，再比较笔画数量、类型、顺序和位置；绝不能退回默认“三笔模板”。
 - 提交答案后必须停留在逐笔反馈，用户点击“下一个 / 查看总结”后再推进题目。
 - 练习类型分为 `stroke` 和 `dictation`。默写练习只隐藏田字格底字，仍沿用真实笔画数据做笔画数量、类型和顺序校验。
 - 旧“错题集”产品文案已改为“练习库”，并按 `libraryType` 分为笔画练习库和默写练习库；IndexedDB store 仍沿用 `mistakes` 以兼容旧数据。
 - 自定义字词库保存 `entries`，支持单字和词语；旧数据的 `chars` 字段需要继续兼容。
+- 词语模式下点击“查看笔顺”必须带上词语中的全部汉字，默认播放第一个字，并允许点其它字切换笔顺动画。
+- iPad 横屏练习页应尽量保持一屏内完成；复杂字逐笔反馈要在反馈区域内部滚动，不要撑开整个页面。
+- 防手掌误触只能做启发式过滤：Apple Pencil / `pointerType=pen` 优先，大面积 touch 和 pen 后续 touch 忽略；普通电容笔若被浏览器识别为 touch，无法完全区分笔尖和手掌。
 
 ## 高风险区域
 
-- `dataFor()`、`ensureStrokeData()`、`createSession()`、`validateChar()`、`drawAnimationFrame()` 是当前最容易引入回归的地方。
+- `dataFor()`、`ensureStrokeData()`、`createSession()`、`validateChar()`、`strokePositionOk()`、`drawAnimationFrame()` 是当前最容易引入回归的地方。
 - `normalizeBankEntries()`、`itemsFromEntries()`、`bankEntries()`、`markReview()` 也属于高风险区域，分别影响自定义字词解析、旧字库兼容和练习库分类。
 - 不要恢复“未收录字默认横/竖/横”的逻辑。这个旧逻辑会导致所有未录入字被错误判为 3 笔。
 - 不要用 `STKaiti` / `KaiTi` / 普通 DOM 文本作为田字格内标准字的主渲染路径。系统字体与 Hanzi Writer 坐标不一致，会出现偏移；代码中保留的字体绘制只能作为缺少 Hanzi Writer median 时的兜底。
 - 不要在 Hanzi Writer 坐标变换里随意加垂直偏移。曾经的 `+ 66 * scale` 会让笔顺页字形偏下。
 - 如果修改 `withHanziTransform()`，必须同时检查练习页和笔顺页同一个字在田字格里的位置。
+- 如果修改 `strokeTypeFromMedian()`、`classifyStroke()`、`compatible()` 或 `strokePositionOk()`，必须测试“山”的第二笔竖折、“飞”的横斜钩，以及同类型笔画调换顺序是否能被判错。
+- 不要只按笔画类型判断正确性。同类型笔画换顺序时，如果位置与标准 median 不符，应显示“笔顺或位置错误”。
 - 远程 CDN 只能作为补充；iPad 离线能力依赖 `data/` 本地 JSON。
 - 本地 Python `http.server` 偶发出现 `ERR_EMPTY_RESPONSE`，遇到空响应先重启服务再判断页面问题。
 
@@ -78,6 +83,8 @@ http://127.0.0.1:4173/index.html?view=animation&char=牛
 http://127.0.0.1:4173/index.html?view=practice&chars=输
 http://127.0.0.1:4173/index.html?view=animation&char=输
 http://127.0.0.1:4173/index.html?view=practice&chars=学习
+http://127.0.0.1:4173/index.html?view=practice&chars=飞
+http://127.0.0.1:4173/index.html?view=animation&char=山&chars=山水
 http://127.0.0.1:4173/index.html?view=custom
 http://127.0.0.1:4173/index.html?view=mistakes
 ```
@@ -89,6 +96,10 @@ http://127.0.0.1:4173/index.html?view=mistakes
 - 笔顺动画是否一笔一划，不是一片片遮罩或残缺覆盖。
 - “输”等复杂字是否显示真实笔画数。
 - 提交后逐笔反馈是否停留，是否需要点击“下一个”才继续。
+- 复杂字提交后逐笔反馈是否在内部滚动，横屏页面整体是否不被撑高。
+- 词语模式点击“查看笔顺”后是否出现词语全部汉字，并可点选切换播放。
+- “山”第二笔是否显示标准“竖折”，“飞”写对时是否不被误判。
+- 同类型笔画调换顺序时是否显示“笔顺或位置错误”。
 - 默写练习田字格内是否没有标准底字，田字格上方是否显示拼音和声调。
 - iPad Air 820×1180 视口下，设置页、练习页、自定义字词库和练习库是否没有文字重叠或按钮挤压。
 

@@ -224,3 +224,54 @@ git config core.sshCommand "ssh -o StrictHostKeyChecking=accept-new -o ProxyComm
 - 默写练习目前仍用笔画类型/方向/顺序启发式校验，不是真正的汉字形状 OCR。
 - 后续如果扩展练习库数据结构，应继续兼容 IndexedDB 的旧 `mistakes` store。
 - 若未来给自定义字词库增加删除、排序或批量导入，需要同步考虑 `entries` 与旧 `chars` 字段兼容。
+
+### 2026-05-27 iPad 横屏、词语笔顺和逐笔校验修复
+
+本轮根据 iPad 实测反馈继续打磨书写练习和笔顺动画，主要修改 `app.js` 与 `styles.css`。
+
+产品与交互改动：
+
+- 词语模式点击“查看笔顺”时，不再只进入词语第一个字的孤立笔顺页。
+- 笔顺页会携带词语中的全部汉字，默认播放第一个字，并在“换一个字”区域显示词语所有字；点击其它字会切换并重新播放对应笔顺。
+- 笔画练习田字格整体缩小：普通单字最大约 340px，iPad 横屏约 280px；词语多字模式更小，方便低龄儿童持笔书写。
+- iPad 横屏下练习页和笔顺页压缩顶部区域，练习主体和反馈区尽量保持在一屏内。
+- 复杂字提交后，逐笔反馈区改为内部滚动，避免“输”等多笔画反馈把整个页面撑到很下面。
+- 增加基础防手掌误触逻辑：`pointerType=pen` 优先；检测到 Apple Pencil / pen 后忽略后续 touch；大面积 touch 视为手掌；同一时间只允许一个田字格接收书写输入。
+
+校验逻辑改动：
+
+- 修复“山”第二笔标准笔画被 Hanzi Writer median 启发式误判为“横”的问题。核心字表已有人工笔画时，优先使用人工笔画名；没有人工表时再用 median 推断。
+- `strokeTypeFromMedian()` 和 `classifyStroke()` 不再只取极短的起止片段判断方向，改为沿路径走到足够距离后判断，减少复合笔画误判。
+- 对“整体方向一致但有弧度”的笔画，优先归为撇/捺/横/竖等基础笔画，避免弯一点的撇被误判成“折”。
+- 增加“飞”的人工标准笔画：`横斜钩、撇、点`，并补充横斜钩相关容错。
+- `validateChar()` 增加 `strokePositionOk()`：除了笔画类型，还比较用户笔画与标准 median 的中心、起点/终点位置，减少同类型笔画调换顺序仍被判对的问题。
+- 逐笔反馈新增“笔顺或位置错误”原因，用于区分笔画类型正确但位置/顺序不对的情况。
+
+踩坑与注意：
+
+- 单纯按“第 N 笔类型”比对不够。像“山”左右两竖、“火”的两个撇，类型可能一样，但顺序错了也必须判错。
+- Hanzi Writer median 是中线，不是人工笔画名称库；复杂折笔或弧线用几何启发式推断会有偏差，核心常用字仍需要人工表兜底。
+- “飞”的第二笔 median 有弧度，旧逻辑因转角过大误判为“折”。后续改分类器时要继续测试“飞”。
+- 防手掌误触无法在网页里做到绝对可靠。普通电容笔若被 Safari/Chrome 当成 touch，网页无法完全区分笔尖和手掌，只能通过触点面积、pen 优先和单活跃书写格降低误触。
+
+验证记录：
+
+- `node --check app.js` 通过。
+- `curl -I http://127.0.0.1:4173/index.html` 返回 200。
+- Chrome headless 按 iPad 横屏 `1180 × 820` 截图检查：
+  - `/private/tmp/ipad-landscape-real-word-practice.png`
+  - `/private/tmp/ipad-landscape-real-word-animation.png`
+  - `/private/tmp/ipad-landscape-real-word-animation-water.png`
+  - `/private/tmp/ipad-landscape-feedback-shu-2.png`
+- 自动化运行时验证：
+  - 词语“山水”练习页为两个田字格。
+  - “查看笔顺”进入后 `app.animation.chars` 为 `山水`，默认播放“山”，点击“水”后切换为“水”。
+  - “输”提交后横屏页面 `scrollHeight === innerHeight`，`body` 为 `overflow: hidden`，反馈列表内部滚动。
+  - “飞”标准轨迹判定正确，标准笔画为 `横斜钩、撇、点`。
+  - “山”左右竖错序、“火”同类型笔画错序会判为错误，并给出“笔顺或位置错误”。
+
+后续计划：
+
+- 为 `validateChar()` 增加更系统的自动化测试脚本，覆盖常用易误判字：山、飞、火、水、马、鸟、输、学。
+- 将核心常用字的人工笔画表扩展到完整低年级字库，减少依赖 median 启发式推断。
+- 后续真机 iPad + Apple Pencil 继续验证防误触策略，必要时提供“仅 Apple Pencil 书写”设置。

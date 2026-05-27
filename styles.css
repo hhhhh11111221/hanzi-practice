@@ -264,6 +264,12 @@ button {
   font-weight: 700;
 }
 
+.char-chip.active {
+  color: #fff;
+  border-color: var(--brand);
+  background: var(--brand);
+}
+
 .pinyin-chip {
   min-width: 58px;
   font-size: 17px;
@@ -322,7 +328,7 @@ button {
 .word-grid {
   display: grid;
   gap: 16px;
-  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
 }
 
 .write-cell {
@@ -351,14 +357,14 @@ button {
 
 .grid-wrap {
   position: relative;
-  width: min(82vw, 400px);
+  width: min(74vw, 340px);
   aspect-ratio: 1;
   touch-action: none;
   user-select: none;
 }
 
 .grid-wrap.small {
-  width: min(68vw, 300px);
+  width: min(58vw, 260px);
 }
 
 .grid-canvas,
@@ -412,6 +418,13 @@ button {
 .custom-list {
   display: grid;
   gap: 10px;
+}
+
+.result-list {
+  max-height: min(48vh, 420px);
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding-right: 2px;
 }
 
 .library-head {
@@ -573,6 +586,151 @@ button {
   }
 }
 
+@media (orientation: landscape) and (max-height: 900px) {
+  html,
+  body,
+  #app {
+    height: 100%;
+  }
+
+  body:has(.practice-layout),
+  body:has(.animation-stage) {
+    overflow: hidden;
+  }
+
+  .topbar {
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 10px;
+    padding: calc(8px + env(safe-area-inset-top)) 18px 8px;
+  }
+
+  .brand-mark {
+    width: 34px;
+    height: 34px;
+  }
+
+  .brand-title {
+    font-size: 18px;
+  }
+
+  .brand-subtitle {
+    display: none;
+  }
+
+  .nav-tabs {
+    justify-content: flex-end;
+  }
+
+  .screen {
+    width: 100%;
+    max-width: 1180px;
+    height: calc(100dvh - 58px);
+    padding: 12px 18px;
+    overflow: hidden;
+  }
+
+  .section-head {
+    margin-bottom: 8px;
+    align-items: center;
+  }
+
+  .section-head h2 {
+    font-size: 28px;
+  }
+
+  .section-head p {
+    margin-top: 2px;
+    font-size: 14px;
+  }
+
+  .button {
+    min-height: 38px;
+    padding: 0 12px;
+  }
+
+  .progress-line {
+    margin-bottom: 8px;
+  }
+
+  .practice-layout {
+    grid-template-columns: minmax(0, 1fr) 330px;
+    gap: 12px;
+    max-height: calc(100dvh - 160px);
+    overflow: hidden;
+  }
+
+  .practice-main.band,
+  .side-panel .card,
+  .animation-stage.band {
+    padding: 12px;
+  }
+
+  .practice-main {
+    max-height: calc(100dvh - 160px);
+    overflow: hidden;
+  }
+
+  .word-grid {
+    gap: 10px;
+    grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  }
+
+  .write-cell {
+    gap: 5px;
+  }
+
+  .pinyin {
+    min-height: 20px;
+    font-size: 16px;
+  }
+
+  .grid-wrap {
+    width: min(34vw, 280px);
+  }
+
+  .grid-wrap.small {
+    width: min(25vw, 220px);
+  }
+
+  .practice-main > .toolbar {
+    margin-top: 10px !important;
+  }
+
+  .side-panel {
+    grid-template-rows: minmax(0, 1fr) auto;
+    max-height: calc(100dvh - 160px);
+    overflow: hidden;
+  }
+
+  .side-panel .card {
+    min-height: 0;
+  }
+
+  .side-panel .card:first-child {
+    overflow: hidden;
+  }
+
+  .result-list {
+    max-height: calc(100dvh - 410px);
+  }
+
+  .stroke-result {
+    gap: 8px;
+    padding: 8px;
+  }
+
+  .animation-stage {
+    grid-template-columns: minmax(0, 360px) minmax(260px, 1fr);
+    gap: 14px;
+    max-height: calc(100dvh - 120px);
+    overflow: hidden;
+  }
+
+  .anim-box {
+    width: min(38vw, 340px);
+  }
+}
+
 @media (max-width: 520px) {
   .screen {
     padding: 14px;
@@ -587,6 +745,6 @@ button {
   }
 
   .grid-wrap {
-    width: min(94vw, 360px);
+    width: min(88vw, 320px);
   }
 }

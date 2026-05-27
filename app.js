@@ -50,6 +50,7 @@ const CORE_STROKES = {
   "山": { pinyin: "shān", strokes: ["shu", "shuzhe", "shu"], paths: ["M124 146 C120 202 120 258 126 300", "M204 82 C200 154 198 230 204 300 C158 302 116 302 84 296", "M286 140 C284 196 282 248 276 300"] },
   "水": { pinyin: "shuǐ", strokes: ["shugou", "hengpie", "pie", "na"], paths: ["M198 84 C196 160 198 238 204 312 C194 322 184 326 170 318", "M124 156 C154 166 174 180 192 202 C158 244 120 278 78 304", "M172 212 C146 240 122 266 94 292", "M218 166 C244 222 282 272 328 304"] },
   "火": { pinyin: "huǒ", strokes: ["dian", "pie", "pie", "na"], paths: ["M154 126 C138 154 126 178 116 202", "M248 112 C238 154 224 184 206 210", "M198 92 C202 186 164 268 82 320", "M206 214 C236 258 278 292 326 316"] },
+  "飞": { pinyin: "fēi", strokes: ["hengxiegou", "pie", "dian"], paths: [] },
   "田": { pinyin: "tián", strokes: ["shu", "hengzhe", "heng", "shu", "heng"], paths: ["M114 102 C108 172 110 244 118 318", "M116 100 C178 90 248 92 296 104 C294 178 292 250 286 318", "M116 204 C170 196 230 198 290 204", "M204 102 C198 168 198 246 204 318", "M118 318 C172 326 232 326 286 318"] },
   "云": { pinyin: "yún", strokes: ["heng", "heng", "piezhe", "dian"], paths: ["M124 126 C174 118 232 120 278 126", "M88 210 C158 200 244 202 318 210", "M202 208 C178 244 154 276 128 304 C176 300 222 294 270 286", "M264 246 C288 268 306 288 320 310"] },
   "手": { pinyin: "shǒu", strokes: ["pie", "heng", "heng", "shugou"], paths: ["M254 80 C210 96 164 108 112 116", "M96 162 C158 154 246 154 308 162", "M82 218 C154 208 256 208 328 216", "M202 112 C198 178 198 250 204 320 C190 330 174 328 158 316"] },
@@ -191,7 +192,10 @@ const app = {
   currentWriters: [],
   animation: null,
   strokeData: {},
-  voices: []
+  voices: [],
+  activeWriter: null,
+  prefersPen: false,
+  lastPenAt: 0
 };
 
 const icons = {
@@ -232,14 +236,9 @@ function strokeTypeFromMedian(median) {
   const lastRaw = median[median.length - 1];
   const last = { x: lastRaw[0] / 1024, y: (900 - lastRaw[1]) / 1024 };
   if (median.length > 2 || pathLength(normalized) > distance(first, last) * 1.22) {
-    const a = { x: median[0][0] / 1024, y: (900 - median[0][1]) / 1024 };
-    const bRaw = median[Math.min(2, median.length - 1)];
-    const b = { x: bRaw[0] / 1024, y: (900 - bRaw[1]) / 1024 };
-    const cRaw = median[Math.max(0, median.length - 3)];
-    const c = { x: cRaw[0] / 1024, y: (900 - cRaw[1]) / 1024 };
-    const d = last;
-    const firstDir = direction(a, b);
-    const lastDir = direction(c, d);
+    const firstDir = directionAlong(normalized, true);
+    const lastDir = directionAlong(normalized, false);
+    if (firstDir === lastDir) return firstDir;
     if (firstDir === "shu" && lastDir === "heng") return "shuzhe";
     if (firstDir === "heng" && lastDir === "shu") return "hengzhe";
     if (firstDir === "heng" && lastDir === "pie") return "hengpie";
@@ -250,9 +249,10 @@ function strokeTypeFromMedian(median) {
 
 function normalizeHanziWriterData(char, raw) {
   const medians = raw.medians || [];
+  const coreStrokes = CORE_STROKES[char]?.strokes;
   return {
     pinyin: CORE_STROKES[char]?.pinyin || "",
-    strokes: medians.map(strokeTypeFromMedian),
+    strokes: coreStrokes?.length === medians.length ? coreStrokes : medians.map(strokeTypeFromMedian),
     paths: raw.strokes || [],
     medians,
     source: "hanzi-writer-data"
@@ -370,7 +370,10 @@ function applyInitialRoute() {
   if (["home", "practice", "animation", "mistakes", "stats", "custom", "settings"].includes(view)) {
     app.view = view;
   }
-  if (view === "animation") app.animation = { char: params.get("char") || "学" };
+  if (view === "animation") {
+    const chars = normalizeChars(params.get("chars") || "");
+    app.animation = { char: params.get("char") || chars[0] || "学", chars };
+  }
   if (view === "practice") {
     const chars = normalizeChars(params.get("chars") || "");
     const practiceType = params.get("practiceType");
@@ -600,6 +603,7 @@ function summaryScreen() {
 function animationScreen(char = app.animation?.char || "学") {
   const info = dataFor(char);
   const firstStroke = info.strokes[0] ? STROKE_NAMES[info.strokes[0]] : "加载中";
+  const switchChars = app.animation?.chars?.length ? app.animation.chars : ["一", "人", "口", "木", "水", "好", "学", "习", "输"];
   return `
     <section class="section-head">
       <div>
@@ -629,7 +633,7 @@ function animationScreen(char = app.animation?.char || "学") {
         </div>
         <div class="card">
           <h3>换一个字</h3>
-          <div class="char-preview">${["一", "人", "口", "木", "水", "好", "学", "习", "输"].map((c) => `<button class="char-chip" data-action="animChar" data-char="${c}">${c}</button>`).join("")}</div>
+          <div class="char-preview anim-char-list">${switchChars.map((c) => `<button class="char-chip ${c === char ? "active" : ""}" data-action="animChar" data-char="${c}">${c}</button>`).join("")}</div>
         </div>
       </div>
     </section>
@@ -853,7 +857,7 @@ async function handleAction(e) {
   if (action === "showOrder") return showOrder();
   if (action === "tryChar") return startAndRender("chars", [el.dataset.char]);
   if (action === "animChar") {
-    app.animation = { char: el.dataset.char };
+    app.animation = { ...app.animation, char: el.dataset.char };
     return render();
   }
   if (action === "reviewLibrary") {
@@ -948,6 +952,19 @@ class HanziWriter {
     });
   }
 
+  acceptsPointer(e) {
+    if (e.pointerType === "pen") {
+      app.prefersPen = true;
+      app.lastPenAt = performance.now();
+      return true;
+    }
+    if (e.pointerType === "touch") {
+      if (app.prefersPen || performance.now() - app.lastPenAt < 1600) return false;
+      if (e.width > 24 || e.height > 24) return false;
+    }
+    return !app.activeWriter || app.activeWriter === this;
+  }
+
   resize() {
     const rect = this.gridCanvas.getBoundingClientRect();
     const dpr = window.devicePixelRatio || 1;
@@ -1014,7 +1031,9 @@ class HanziWriter {
 
   start(e) {
     e.preventDefault();
+    if (!this.acceptsPointer(e)) return;
     this.activePointer = e.pointerId;
+    app.activeWriter = this;
     this.inkCanvas.setPointerCapture(e.pointerId);
     this.current = { points: [this.point(e)] };
   }
@@ -1042,6 +1061,7 @@ class HanziWriter {
     if (pathLength(this.current.points) > 0.01) this.strokes.push(this.current);
     app.lastWriter = this;
     this.current = null;
+    if (app.activeWriter === this) app.activeWriter = null;
     this.redrawInk();
   }
 
@@ -1074,6 +1094,7 @@ class HanziWriter {
   clear() {
     this.strokes = [];
     this.current = null;
+    if (app.activeWriter === this) app.activeWriter = null;
     this.redrawInk();
   }
 }
@@ -1109,6 +1130,17 @@ function pathLength(points) {
   return points.slice(1).reduce((sum, p, i) => sum + distance(points[i], p), 0);
 }
 
+function directionAlong(points, fromStart = true, minDistance = 0.12) {
+  const ordered = fromStart ? points : [...points].reverse();
+  const anchor = ordered[0];
+  let traveled = 0;
+  for (let i = 1; i < ordered.length; i++) {
+    traveled += distance(ordered[i - 1], ordered[i]);
+    if (traveled >= minDistance) return fromStart ? direction(anchor, ordered[i]) : direction(ordered[i], anchor);
+  }
+  return fromStart ? direction(anchor, ordered[ordered.length - 1]) : direction(ordered[ordered.length - 1], anchor);
+}
+
 function simplify(points, threshold = 0.035) {
   if (points.length <= 3) return points;
   const result = [points[0]];
@@ -1130,8 +1162,9 @@ function classifyStroke(stroke) {
   const turns = turnCount(points);
   if (len < 0.075) return "dian";
   if (turns >= 1 || len / Math.max(direct, 0.001) > 1.35) {
-    const firstDir = direction(points[0], points[Math.min(2, points.length - 1)]);
-    const lastDir = direction(points[Math.max(0, points.length - 3)], last);
+    const firstDir = directionAlong(points, true);
+    const lastDir = directionAlong(points, false);
+    if (firstDir === lastDir) return firstDir;
     if (firstDir === "heng" && lastDir === "shu") return "hengzhe";
     if (firstDir === "heng" && lastDir === "pie") return "hengpie";
     if (firstDir === "shu" && lastDir === "heng") return "shuzhe";
@@ -1173,8 +1206,12 @@ function compatible(expected, actual) {
   const loosePairs = [
     ["ti", "heng"],
     ["dian", "pie"],
+    ["dian", "na"],
     ["na", "dian"],
     ["hengzhegou", "hengzhe"],
+    ["hengxiegou", "hengzheti"],
+    ["hengxiegou", "xiegou"],
+    ["hengxiegou", "zhe"],
     ["shugou", "shu"],
     ["shuwangou", "shuzhe"],
     ["henggou", "heng"],
@@ -1182,6 +1219,29 @@ function compatible(expected, actual) {
     ["xiegou", "na"]
   ];
   return loosePairs.some(([a, b]) => (a === expected && b === actual) || (b === expected && a === actual));
+}
+
+function normalizeMedianPoints(median) {
+  return (median || []).map(([x, y]) => ({ x: x / 1024, y: (900 - y) / 1024 }));
+}
+
+function centroid(points) {
+  if (!points?.length) return { x: 0.5, y: 0.5 };
+  return points.reduce((sum, p) => ({ x: sum.x + p.x / points.length, y: sum.y + p.y / points.length }), { x: 0, y: 0 });
+}
+
+function strokePositionOk(info, index, stroke) {
+  const median = info.medians?.[index];
+  if (!median?.length || !stroke?.points?.length) return true;
+  const expectedPoints = normalizeMedianPoints(median);
+  const actualPoints = stroke.points;
+  const centerGap = distance(centroid(actualPoints), centroid(expectedPoints));
+  const startGap = distance(actualPoints[0], expectedPoints[0]);
+  const endGap = distance(actualPoints[actualPoints.length - 1], expectedPoints[expectedPoints.length - 1]);
+  const expectedLength = pathLength(expectedPoints);
+  const centerLimit = expectedLength > 0.75 ? 0.34 : 0.27;
+  const endpointLimit = expectedLength > 0.75 ? 0.42 : 0.34;
+  return centerGap <= centerLimit && (startGap <= endpointLimit || endGap <= endpointLimit);
 }
 
 function mergeTinyStrokes(strokes, targetCount) {
@@ -1204,7 +1264,8 @@ function validateChar(char, strokes) {
       results: [{ ok: false, expected: "unsupported", actual: "", reason: "该字没有标准笔画数据，不能校验" }]
     };
   }
-  const standard = dataFor(char).strokes;
+  const info = dataFor(char);
+  const standard = info.strokes;
   const merged = mergeTinyStrokes(strokes, standard.length);
   const actual = merged.map(classifyStroke);
   const results = [];
@@ -1216,13 +1277,14 @@ function validateChar(char, strokes) {
     };
   }
   for (let i = 0; i < standard.length; i++) {
-    const orderOk = Boolean(actual[i]);
+    const positionOk = strokePositionOk(info, i, merged[i]);
+    const orderOk = Boolean(actual[i]) && positionOk;
     const typeOk = app.settings.strictness === "loose" ? orderOk : compatible(standard[i], actual[i]);
     results.push({
       ok: orderOk && typeOk,
       expected: standard[i],
       actual: actual[i],
-      reason: typeOk ? "" : "笔画类型或方向错误"
+      reason: !orderOk ? "笔顺或位置错误" : (typeOk ? "" : "笔画类型或方向错误")
     });
   }
   return {
@@ -1391,17 +1453,18 @@ function playSound(ok) {
 
 function showOrder() {
   const item = app.session.items[app.session.index];
-  const char = item.type === "word" ? item.text[0] : item.char;
+  const chars = item.type === "word" ? [...item.text] : [item.char];
+  const char = chars[0];
   app.session.usedHint = true;
   app.session.unfamiliar += 1;
-  app.animation = { char };
+  app.animation = { char, chars };
   app.view = "animation";
   render();
 }
 
 function initAnimation(char) {
   cancelAnimation();
-  app.animation = { char, start: performance.now(), elapsed: 0, raf: 0 };
+  app.animation = { ...app.animation, char, start: performance.now(), elapsed: 0, raf: 0 };
   const box = $(".anim-box");
   if (!box) return;
   const grid = $(".grid-canvas", box);
