@@ -264,6 +264,11 @@ button {
   font-weight: 700;
 }
 
+.pinyin-chip {
+  min-width: 58px;
+  font-size: 17px;
+}
+
 .stat-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -339,6 +344,11 @@ button {
   color: var(--muted);
 }
 
+.write-cell.dictation .character-label {
+  color: var(--muted);
+  font-size: 14px;
+}
+
 .grid-wrap {
   position: relative;
   width: min(82vw, 400px);
@@ -402,6 +412,13 @@ button {
 .custom-list {
   display: grid;
   gap: 10px;
+}
+
+.library-head {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 12px;
 }
 
 .stroke-result {
@@ -549,6 +566,10 @@ button {
 
   .side-panel {
     order: -1;
+  }
+
+  .practice-layout .side-panel {
+    order: initial;
   }
 }
 

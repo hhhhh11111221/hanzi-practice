@@ -18,6 +18,7 @@
 - 修改前先运行 `git status --short --branch`，确认当前工作区状态。
 - 不要删除或重写用户已有改动；如果发现未提交改动，先理解差异。
 - 保持 `?view=practice&chars=...` 路由参数支持，这是之前已修复过的点。
+- 保持 `?view=practice&chars=...&practiceType=dictation` 调试路由支持，方便直接复现默写练习。
 - 如果新增练习入口或路由，必须确认刷新页面后仍能恢复到正确视图。
 - 修改 UI 后要检查 iPad/移动端宽度下是否有文字重叠、按钮挤压、内容溢出。
 - 数据文件名使用汉字，例如 `data/学.json`；不要把这些文件名转成拼音或 ASCII。
@@ -51,10 +52,14 @@
 - 练习页标准字预览也应使用 Hanzi Writer 轮廓 canvas，避免系统字体基线造成偏右、偏下、大小不一致。
 - 书写校验应先加载真实笔画数据，再比较笔画数量、类型和顺序；绝不能退回默认“三笔模板”。
 - 提交答案后必须停留在逐笔反馈，用户点击“下一个 / 查看总结”后再推进题目。
+- 练习类型分为 `stroke` 和 `dictation`。默写练习只隐藏田字格底字，仍沿用真实笔画数据做笔画数量、类型和顺序校验。
+- 旧“错题集”产品文案已改为“练习库”，并按 `libraryType` 分为笔画练习库和默写练习库；IndexedDB store 仍沿用 `mistakes` 以兼容旧数据。
+- 自定义字词库保存 `entries`，支持单字和词语；旧数据的 `chars` 字段需要继续兼容。
 
 ## 高风险区域
 
 - `dataFor()`、`ensureStrokeData()`、`createSession()`、`validateChar()`、`drawAnimationFrame()` 是当前最容易引入回归的地方。
+- `normalizeBankEntries()`、`itemsFromEntries()`、`bankEntries()`、`markReview()` 也属于高风险区域，分别影响自定义字词解析、旧字库兼容和练习库分类。
 - 不要恢复“未收录字默认横/竖/横”的逻辑。这个旧逻辑会导致所有未录入字被错误判为 3 笔。
 - 不要用 `STKaiti` / `KaiTi` / 普通 DOM 文本作为田字格内标准字的主渲染路径。系统字体与 Hanzi Writer 坐标不一致，会出现偏移；代码中保留的字体绘制只能作为缺少 Hanzi Writer median 时的兜底。
 - 不要在 Hanzi Writer 坐标变换里随意加垂直偏移。曾经的 `+ 66 * scale` 会让笔顺页字形偏下。
@@ -68,10 +73,13 @@
 
 ```text
 http://127.0.0.1:4173/index.html?view=practice&chars=牛
+http://127.0.0.1:4173/index.html?view=practice&chars=牛&practiceType=dictation
 http://127.0.0.1:4173/index.html?view=animation&char=牛
 http://127.0.0.1:4173/index.html?view=practice&chars=输
 http://127.0.0.1:4173/index.html?view=animation&char=输
 http://127.0.0.1:4173/index.html?view=practice&chars=学习
+http://127.0.0.1:4173/index.html?view=custom
+http://127.0.0.1:4173/index.html?view=mistakes
 ```
 
 重点看：
@@ -81,6 +89,8 @@ http://127.0.0.1:4173/index.html?view=practice&chars=学习
 - 笔顺动画是否一笔一划，不是一片片遮罩或残缺覆盖。
 - “输”等复杂字是否显示真实笔画数。
 - 提交后逐笔反馈是否停留，是否需要点击“下一个”才继续。
+- 默写练习田字格内是否没有标准底字，田字格上方是否显示拼音和声调。
+- iPad Air 820×1180 视口下，设置页、练习页、自定义字词库和练习库是否没有文字重叠或按钮挤压。
 
 ## 已知开发环境
 

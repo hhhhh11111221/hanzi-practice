@@ -182,3 +182,45 @@ git config core.sshCommand "ssh -o StrictHostKeyChecking=accept-new -o ProxyComm
   - 推送分支和标签到 GitHub。
 
 注意：脚本不能自动读取聊天内容，必须由 Codex 在运行脚本前完成文档提炼。
+
+### 2026-05-27 功能改造：字词库、默写练习、练习库
+
+本轮在 `/Users/Claw/hanzi-practice` 继续开发，完成以下产品改造：
+
+- 自定义字库改为自定义字词库，支持单字和词语条目。
+- 用户编辑字词库时，可以用空格、英文逗号、中文逗号、顿号或分号分隔。
+- 新字词库数据保存 `entries`，同时保留 `chars` 派生字段，兼容旧版本只保存单字的 `chars` 数据。
+- 设置页新增练习类型：
+  - `stroke`：笔画练习，显示标准底字。
+  - `dictation`：汉字默写练习，只显示拼音和声调，不显示田字格底字。
+- `?view=practice&chars=学习&practiceType=dictation` 可直接进入指定汉字的默写练习，方便调试和复现。
+- “错题 / 错题集”产品命名改为“练习库”，表示孩子还不熟练的字。
+- 练习库按 `libraryType` 分为笔画练习库和默写练习库。
+- IndexedDB store 仍沿用 `mistakes`，避免破坏已有本地数据；启动时会把旧 `id=字` 数据迁移成 `stroke:字`。
+
+实现要点：
+
+- `normalizeBankEntries(text)` 负责解析字词条目。
+- `bankEntries(bank)` 兼容新 `entries` 和旧 `chars`。
+- `itemsFromEntries(entries)` 把单字转为 char item，把词语转为 word item。
+- `createSession()` 会把当前 `app.settings.practiceType` 写入 session；复习练习库时使用对应库的练习类型。
+- `HanziWriter.drawStandard()` 在 `dictation` 模式下直接跳过标准底字绘制。
+- `markReview()` 写入 `libraryType`，同一个字在笔画练习库和默写练习库中可以独立记录。
+
+验证记录：
+
+- 运行 `node --check app.js` 通过。
+- 使用 Chrome DevTools 设备工具栏切到 iPad Air，确认当前页面在 `820 × 1180` 视口下可用。
+- 使用 Chrome headless 按 `820 × 1180` 生成并检查截图：
+  - `/private/tmp/hanzi-practice-settings-ipad.png`
+  - `/private/tmp/hanzi-practice-practice-ipad.png`
+  - `/private/tmp/hanzi-practice-dictation-ipad.png`
+  - `/private/tmp/hanzi-practice-custom-ipad.png`
+  - `/private/tmp/hanzi-practice-library-ipad.png`
+- iPad 视口下调整了练习页响应式顺序，让田字格优先显示，逐笔反馈和提示卡片位于书写区下方。
+
+后续注意：
+
+- 默写练习目前仍用笔画类型/方向/顺序启发式校验，不是真正的汉字形状 OCR。
+- 后续如果扩展练习库数据结构，应继续兼容 IndexedDB 的旧 `mistakes` store。
+- 若未来给自定义字词库增加删除、排序或批量导入，需要同步考虑 `entries` 与旧 `chars` 字段兼容。

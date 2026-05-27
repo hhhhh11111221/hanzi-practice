@@ -114,6 +114,7 @@ const WORDS = [
 const DEFAULT_SETTINGS = {
   count: 5,
   mode: "mixed",
+  practiceType: "stroke",
   strictness: "strict",
   animationSpeed: 1,
   sound: true
@@ -302,6 +303,43 @@ function normalizeChars(text) {
   return [...new Set([...text.replace(/[^\u4e00-\u9fa5]/g, "")])];
 }
 
+function normalizeBankEntries(text) {
+  const entries = text
+    .split(/[\s,，、;；]+/)
+    .map((item) => item.replace(/[^\u4e00-\u9fa5]/g, ""))
+    .filter(Boolean);
+  return [...new Set(entries)];
+}
+
+function bankEntries(bank) {
+  if (bank?.entries?.length) return bank.entries;
+  return bank?.chars?.length ? bank.chars : [];
+}
+
+function itemsFromEntries(entries) {
+  return entries.flatMap((entry) => {
+    const chars = normalizeChars(entry);
+    if (!chars.length) return [];
+    if (chars.length === 1) return { type: "char", char: chars[0] };
+    const text = chars.join("");
+    return { type: "word", text, pinyin: getPinyinList(text) };
+  });
+}
+
+function getPinyinList(text) {
+  return [...text].map((char) => dataFor(char).pinyin || "");
+}
+
+function escapeHTML(value) {
+  return String(value).replace(/[&<>"']/g, (char) => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+    "'": "&#39;"
+  })[char]);
+}
+
 async function boot() {
   if (!("indexedDB" in window)) {
     $("#app").innerHTML = `<main class="screen"><div class="card"><h2>浏览器不支持 IndexedDB</h2><p>请使用 Safari、Chrome 或 Edge 的较新版本。</p></div></main>`;
@@ -314,6 +352,14 @@ async function boot() {
   app.records = await db.all("records");
   app.mistakes = await db.all("mistakes");
   app.customBanks = await db.all("customBanks");
+  const migrated = [];
+  app.mistakes.forEach((item) => {
+    const oldId = item.id;
+    if (!item.libraryType) item.libraryType = "stroke";
+    if (!item.id.includes(":")) item.id = `${item.libraryType}:${item.char}`;
+    if (oldId !== item.id) migrated.push({ oldId, item });
+  });
+  await Promise.all(migrated.map(({ oldId, item }) => db.delete("mistakes", oldId).then(() => db.put("mistakes", item))));
   applyInitialRoute();
   render();
 }
@@ -327,6 +373,8 @@ function applyInitialRoute() {
   if (view === "animation") app.animation = { char: params.get("char") || "学" };
   if (view === "practice") {
     const chars = normalizeChars(params.get("chars") || "");
+    const practiceType = params.get("practiceType");
+    if (["stroke", "dictation"].includes(practiceType)) app.settings.practiceType = practiceType;
     createSession(chars.length ? "chars" : "quick", chars);
   }
 }
@@ -347,14 +395,14 @@ function render() {
         <div class="brand-mark">字</div>
         <div>
           <h1 class="brand-title">小学生字练习</h1>
-          <p class="brand-subtitle">iPad 手写、笔顺动画、错题复习</p>
+          <p class="brand-subtitle">iPad 手写、笔顺动画、练习库复习</p>
         </div>
       </div>
       <nav class="nav-tabs" aria-label="主导航">
         ${navButton("home", "课程")}
         ${navButton("practice", "练习")}
         ${navButton("animation", "笔顺")}
-        ${navButton("mistakes", "错题")}
+        ${navButton("mistakes", "练习库")}
         ${navButton("stats", "统计")}
         ${navButton("custom", "字库")}
         ${navButton("settings", "设置")}
@@ -443,13 +491,16 @@ function overviewCard() {
   const total = app.records.reduce((sum, item) => sum + item.total, 0);
   const correct = app.records.reduce((sum, item) => sum + item.correct, 0);
   const rate = total ? Math.round((correct / total) * 100) : 0;
+  const strokeLibrary = app.mistakes.filter((item) => (item.libraryType || "stroke") === "stroke").length;
+  const dictationLibrary = app.mistakes.filter((item) => item.libraryType === "dictation").length;
   return `
     <div class="card">
       <h3>学习概览</h3>
       <div class="stat-grid">
         <div class="stat"><strong>${total}</strong><span class="small-text">累计练习</span></div>
         <div class="stat"><strong>${rate}%</strong><span class="small-text">正确率</span></div>
-        <div class="stat"><strong>${app.mistakes.length}</strong><span class="small-text">错题数</span></div>
+        <div class="stat"><strong>${strokeLibrary}</strong><span class="small-text">笔画练习库</span></div>
+        <div class="stat"><strong>${dictationLibrary}</strong><span class="small-text">默写练习库</span></div>
         <div class="stat"><strong>${app.customBanks.length}</strong><span class="small-text">自定义字库</span></div>
       </div>
     </div>
@@ -462,11 +513,14 @@ function practiceScreen() {
   if (session.done) return summaryScreen();
   const item = session.items[session.index];
   const chars = item.type === "word" ? [...item.text] : [item.char];
+  const isDictation = session.practiceType === "dictation";
+  const practiceTitle = session.source === "review" ? "练习库复习" : (isDictation ? "汉字默写练习" : "笔画练习");
+  const sideTitle = isDictation ? "默写提示" : "标准字预览";
   return `
     <section class="section-head">
       <div>
-        <h2>${session.source === "review" ? "复习" : "书写练习"}</h2>
-        <p>${item.type === "word" ? "词语模式" : "单字模式"} · ${session.usedHint ? "已使用提示" : "未使用提示"}</p>
+        <h2>${practiceTitle}</h2>
+        <p>${item.type === "word" ? "词语模式" : "单字模式"} · ${isDictation ? "看拼音默写汉字" : "按标准笔顺书写"} · ${session.usedHint ? "已使用提示" : "未使用提示"}</p>
       </div>
       <div class="toolbar">
         <button class="button ghost" data-action="speak">${icons.speaker}朗读</button>
@@ -480,7 +534,7 @@ function practiceScreen() {
     <section class="practice-layout">
       <div class="practice-main band">
         <div class="word-grid">
-          ${chars.map((char, i) => writeCell(char, item.pinyin?.[i] || dataFor(char).pinyin, i, chars.length > 1)).join("")}
+          ${chars.map((char, i) => writeCell(char, item.pinyin?.[i] || dataFor(char).pinyin, i, chars.length > 1, session.practiceType)).join("")}
         </div>
         <div class="toolbar" style="margin-top:16px">
           <button class="button ghost" data-action="undo">${icons.undo}撤销</button>
@@ -495,25 +549,26 @@ function practiceScreen() {
           <div id="resultList" class="result-list"><p class="small-text">提交后会显示笔画类型、方向、顺序反馈。</p></div>
         </div>
         <div class="card">
-          <h3>标准字预览</h3>
-          <div class="char-preview">${chars.map((char) => `<span class="char-chip">${char}</span>`).join("")}</div>
-          <p class="small-text">结果页会把标准字与学生笔迹并列展示。</p>
+          <h3>${sideTitle}</h3>
+          <div class="char-preview">${isDictation ? chars.map((char) => `<span class="char-chip pinyin-chip">${dataFor(char).pinyin || "拼音"}</span>`).join("") : chars.map((char) => `<span class="char-chip">${char}</span>`).join("")}</div>
+          <p class="small-text">${isDictation ? "田字格不显示底字，提交后仍按笔顺和笔画数量校验。" : "结果页会把标准字与学生笔迹并列展示。"}</p>
         </div>
       </aside>
     </section>
   `;
 }
 
-function writeCell(char, pinyin, index, compact) {
+function writeCell(char, pinyin, index, compact, practiceType = "stroke") {
+  const isDictation = practiceType === "dictation";
   return `
-    <div class="write-cell" data-index="${index}" data-char="${char}">
+    <div class="write-cell ${isDictation ? "dictation" : ""}" data-index="${index}" data-char="${char}" data-practice-type="${practiceType}">
       <div class="pinyin">${pinyin || "&nbsp;"}</div>
       <div class="grid-wrap ${compact ? "small" : ""}">
         <canvas class="grid-canvas"></canvas>
         <canvas class="standard-canvas"></canvas>
         <canvas class="ink-canvas" aria-label="${char} 书写区域"></canvas>
       </div>
-      <div class="character-label">${char}</div>
+      <div class="character-label">${isDictation ? "默写" : char}</div>
     </div>
   `;
 }
@@ -582,30 +637,50 @@ function animationScreen(char = app.animation?.char || "学") {
 }
 
 function mistakesScreen() {
-  const due = app.mistakes.filter((m) => !m.nextReview || m.nextReview <= Date.now());
+  const strokeItems = libraryItems("stroke");
+  const dictationItems = libraryItems("dictation");
   return `
     <section class="section-head">
       <div>
-        <h2>错题集</h2>
-        <p>基于间隔重复安排复习，越容易错的字复习越频繁。</p>
+        <h2>练习库</h2>
+        <p>这里收集孩子还不熟练的字，按笔画练习和默写练习分别复习。</p>
       </div>
-      <button class="button" data-action="reviewMistakes" ${due.length ? "" : "disabled"}>${icons.play}复习到期错题</button>
     </section>
+    ${librarySection("笔画练习库", "stroke", strokeItems)}
+    ${librarySection("默写练习库", "dictation", dictationItems)}
+  `;
+}
+
+function libraryItems(type) {
+  return app.mistakes.filter((item) => (item.libraryType || "stroke") === type);
+}
+
+function librarySection(title, type, items) {
+  const due = items.filter((m) => !m.nextReview || m.nextReview <= Date.now());
+  return `
     <section class="band mistake-list">
-      ${app.mistakes.length ? app.mistakes.map(mistakeRow).join("") : `<p class="small-text">还没有错题。完成练习后，错误汉字会自动加入这里。</p>`}
+      <div class="library-head">
+        <div>
+          <h3>${title}</h3>
+          <p class="small-text">${type === "dictation" ? "默写练习中还不熟练的字。" : "笔画练习中还不熟练的字。"}</p>
+        </div>
+        <button class="button" data-action="reviewLibrary" data-type="${type}" ${due.length ? "" : "disabled"}>${icons.play}练习到期字</button>
+      </div>
+      ${items.length ? items.map(mistakeRow).join("") : `<p class="small-text">这个练习库还是空的。完成练习后，不熟练的字会自动加入这里。</p>`}
     </section>
   `;
 }
 
 function mistakeRow(item) {
+  const type = item.libraryType || "stroke";
   return `
     <article class="book-row">
       <div><span class="char-chip">${item.char}</span></div>
       <div>
         <h3>${item.char} <span class="small-text">${dataFor(item.char).pinyin}</span></h3>
-        <div class="unit-meta">错误 ${item.count} 次 · 最近 ${new Date(item.lastWrong).toLocaleString()} · 下次 ${item.nextReview ? new Date(item.nextReview).toLocaleString() : "现在"}</div>
+        <div class="unit-meta">不熟练 ${item.count} 次 · 最近 ${new Date(item.lastWrong).toLocaleString()} · 下次 ${item.nextReview ? new Date(item.nextReview).toLocaleString() : "现在"}</div>
       </div>
-      <button class="button secondary" data-action="reviewOne" data-char="${item.char}">复习</button>
+      <button class="button secondary" data-action="reviewOne" data-type="${type}" data-char="${item.char}">练习</button>
     </article>
   `;
 }
@@ -642,7 +717,7 @@ function customScreen() {
     <section class="section-head">
       <div>
         <h2>自定义字词库</h2>
-        <p>创建自己的生字列表，可直接进入复习或练习。</p>
+        <p>创建自己的单字或词语列表，编辑时用空格或逗号分隔。</p>
       </div>
       <button class="button" data-action="newBank">${icons.plus}新建字库</button>
     </section>
@@ -654,7 +729,7 @@ function customScreen() {
         <h3 id="bankFormTitle">新建字库</h3>
         <div class="field-grid">
           <div class="field"><label for="bankName">名称</label><input id="bankName" placeholder="例如：本周听写" /></div>
-          <div class="field"><label for="bankChars">汉字列表</label><textarea id="bankChars" placeholder="输入汉字，会自动去重"></textarea></div>
+          <div class="field"><label for="bankChars">字词列表</label><textarea id="bankChars" placeholder="例如：牛 羊 学习，学校"></textarea></div>
           <button class="button" data-action="saveBank">保存</button>
         </div>
       </aside>
@@ -663,10 +738,12 @@ function customScreen() {
 }
 
 function bankRow(bank) {
+  const entries = bankEntries(bank);
+  const charCount = normalizeChars(entries.join("")).length;
   return `
     <article class="book-row">
-      <div><h3>${bank.name}</h3><div class="unit-meta">${bank.chars.length} 个字</div></div>
-      <div class="char-preview">${bank.chars.slice(0, 28).map((char) => `<span class="char-chip">${char}</span>`).join("")}</div>
+      <div><h3>${escapeHTML(bank.name)}</h3><div class="unit-meta">${entries.length} 个条目 · ${charCount} 个字</div></div>
+      <div class="char-preview">${entries.slice(0, 28).map((entry) => `<span class="char-chip">${entry}</span>`).join("")}</div>
       <div class="toolbar">
         <button class="button secondary" data-action="practiceBank" data-id="${bank.id}">练习</button>
         <button class="button ghost" data-action="editBank" data-id="${bank.id}">编辑</button>
@@ -693,6 +770,13 @@ function settingsScreen() {
         <div class="segmented" data-setting="mode">
           <button data-value="single" class="${app.settings.mode === "single" ? "active" : ""}">仅单字</button>
           <button data-value="mixed" class="${app.settings.mode === "mixed" ? "active" : ""}">单字+词语</button>
+        </div>
+      </div>
+      <div class="field">
+        <label>练习类型</label>
+        <div class="segmented" data-setting="practiceType">
+          <button data-value="stroke" class="${app.settings.practiceType === "stroke" ? "active" : ""}">笔画练习</button>
+          <button data-value="dictation" class="${app.settings.practiceType === "dictation" ? "active" : ""}">汉字默写</button>
         </div>
       </div>
       <div class="field">
@@ -772,14 +856,18 @@ async function handleAction(e) {
     app.animation = { char: el.dataset.char };
     return render();
   }
-  if (action === "reviewMistakes") return startAndRender("review", app.mistakes.map((m) => m.char));
-  if (action === "reviewOne") return startAndRender("review", [el.dataset.char]);
+  if (action === "reviewLibrary") {
+    const libraryType = el.dataset.type || "stroke";
+    const chars = libraryItems(libraryType).filter((m) => !m.nextReview || m.nextReview <= Date.now()).map((m) => m.char);
+    return startAndRender("review", { chars, practiceType: libraryType });
+  }
+  if (action === "reviewOne") return startAndRender("review", { chars: [el.dataset.char], practiceType: el.dataset.type || "stroke" });
   if (action === "newBank") return fillBankForm();
   if (action === "saveBank") return saveBank();
   if (action === "editBank") return editBank(el.dataset.id);
   if (action === "practiceBank") {
     const bank = app.customBanks.find((b) => b.id === el.dataset.id);
-    return startAndRender("chars", bank?.chars || []);
+    return startAndRender("entries", bankEntries(bank));
   }
   if (action === "resetData") return confirmReset();
 }
@@ -794,14 +882,21 @@ async function startAndRender(type, payload) {
 
 function createSession(type, payload) {
   let items = [];
+  let practiceType = app.settings.practiceType || "stroke";
   if (type === "book") {
     items = app.curriculum[payload].units.flatMap((u) => u.lessons.flatMap((l) => l.chars)).map((char) => ({ type: "char", char }));
   } else if (type === "lesson") {
     items = app.curriculum[payload.book].units[payload.unit].lessons[payload.lesson].chars.map((char) => ({ type: "char", char }));
   } else if (type === "word") {
     items = WORDS.map((w) => ({ type: "word", text: w.text, pinyin: w.pinyin }));
-  } else if (type === "chars" || type === "review") {
+  } else if (type === "entries") {
+    items = itemsFromEntries(payload || []);
+  } else if (type === "chars") {
     items = (payload || []).map((char) => ({ type: "char", char }));
+  } else if (type === "review") {
+    const reviewPayload = Array.isArray(payload) ? { chars: payload, practiceType: "stroke" } : (payload || {});
+    practiceType = reviewPayload.practiceType || "stroke";
+    items = (reviewPayload.chars || []).map((char) => ({ type: "char", char }));
   } else {
     const chars = [...LOW_GRADE_CHARS].sort(() => Math.random() - 0.5).slice(0, app.settings.count).map((char) => ({ type: "char", char }));
     const wordItems = WORDS.map((word) => ({ type: "word", text: word.text, pinyin: word.pinyin })).slice(0, Math.min(2, app.settings.count));
@@ -810,6 +905,7 @@ function createSession(type, payload) {
   if (!items.length) items = [{ type: "char", char: "一" }];
   app.session = {
     source: type === "review" ? "review" : "practice",
+    practiceType,
     items: items.slice(0, Math.max(1, app.settings.count)),
     index: 0,
     startedAt: Date.now(),
@@ -873,6 +969,7 @@ class HanziWriter {
     const rect = this.standardCanvas.getBoundingClientRect();
     const ctx = this.standardCtx;
     ctx.clearRect(0, 0, rect.width, rect.height);
+    if (this.root.dataset.practiceType === "dictation") return;
     const info = dataFor(this.char);
     if (info.source === "hanzi-writer-data") {
       info.paths.forEach((pathData) => drawHanziPath(ctx, pathData, "rgba(29, 36, 51, 0.12)", rect.width, rect.height));
@@ -1186,6 +1283,7 @@ async function saveRecord() {
   const record = {
     id: String(Date.now()),
     createdAt: Date.now(),
+    practiceType: s.practiceType,
     total: s.correct + s.wrong,
     correct: s.correct,
     wrong: s.wrong,
@@ -1198,8 +1296,10 @@ async function saveRecord() {
 }
 
 async function markReview(chars, correct) {
+  const libraryType = app.session?.practiceType || "stroke";
   for (const char of chars) {
-    let item = app.mistakes.find((m) => m.char === char);
+    const id = `${libraryType}:${char}`;
+    let item = app.mistakes.find((m) => m.id === id || (m.char === char && (m.libraryType || "stroke") === libraryType));
     if (correct) {
       if (item) {
         item.ease = Math.min(6, (item.ease || 1) + 1);
@@ -1209,9 +1309,11 @@ async function markReview(chars, correct) {
       continue;
     }
     if (!item) {
-      item = { id: char, char, count: 0, ease: 1 };
+      item = { id, char, libraryType, count: 0, ease: 1 };
       app.mistakes.push(item);
     }
+    item.id = id;
+    item.libraryType = libraryType;
     item.count += 1;
     item.ease = Math.max(1, (item.ease || 1) - 0.5);
     item.lastWrong = Date.now();
@@ -1487,16 +1589,18 @@ function setTraceFont(ctx, width) {
 function fillBankForm(bank = null) {
   $("#bankFormTitle").textContent = bank ? "编辑字库" : "新建字库";
   $("#bankName").value = bank?.name || "";
-  $("#bankChars").value = bank?.chars?.join("") || "";
+  $("#bankChars").value = bankEntries(bank).join(" ");
   $("#bankName").dataset.id = bank?.id || "";
 }
 
 async function saveBank() {
   const id = $("#bankName").dataset.id || String(Date.now());
+  const entries = normalizeBankEntries($("#bankChars").value);
   const bank = {
     id,
     name: $("#bankName").value.trim() || "未命名字库",
-    chars: normalizeChars($("#bankChars").value)
+    entries,
+    chars: normalizeChars(entries.join(""))
   };
   await db.put("customBanks", bank);
   const index = app.customBanks.findIndex((b) => b.id === id);
@@ -1520,7 +1624,7 @@ function confirmReset() {
   backdrop.innerHTML = `
     <div class="modal">
       <h2>确认重置数据？</h2>
-      <p class="small-text">这会清除设置、练习记录、错题和自定义字库。</p>
+      <p class="small-text">这会清除设置、练习记录、练习库和自定义字库。</p>
       <div class="toolbar">
         <button class="button danger" id="confirmReset">确认重置</button>
         <button class="button ghost" id="cancelReset">取消</button>
