@@ -23,6 +23,48 @@
 - 数据文件名使用汉字，例如 `data/学.json`；不要把这些文件名转成拼音或 ASCII。
 - `.gitignore` 已忽略 `.DS_Store`、`node_modules/`、`.env*`、`dist/`、`build/`，不要提交密钥或本机缓存。
 
+## 产品与实现决策
+
+- 主要目标设备是 iPad + Apple Pencil，所有书写交互优先考虑触控、低延迟和 HiDPI canvas 清晰度。
+- 项目保持无构建、无框架的静态网页形态，方便本地 HTTP 服务和 iPad 局域网访问。
+- 田字格底字与笔顺动画必须使用同一套标准字形数据，不要再用 CSS 字体层模拟标准字。
+- 标准字形与笔顺数据优先来自 `data/*.json` 的 Hanzi Writer / Make Me a Hanzi 数据；每个 JSON 包含 `strokes` 轮廓和 `medians` 中线。
+- `app.js` 内的 `CORE_STROKES` 只作为极早期兜底和拼音/基础笔画参考，不应再作为主要字库来源。
+- 笔顺动画的正确模型是：灰色显示全部未写笔画轮廓，黑色显示已写笔画，当前笔画根据 median 逐步揭示。
+- 练习页标准字预览也应使用 Hanzi Writer 轮廓 canvas，避免系统字体基线造成偏右、偏下、大小不一致。
+- 书写校验应先加载真实笔画数据，再比较笔画数量、类型和顺序；绝不能退回默认“三笔模板”。
+- 提交答案后必须停留在逐笔反馈，用户点击“下一个 / 查看总结”后再推进题目。
+
+## 高风险区域
+
+- `dataFor()`、`ensureStrokeData()`、`createSession()`、`validateChar()`、`drawAnimationFrame()` 是当前最容易引入回归的地方。
+- 不要恢复“未收录字默认横/竖/横”的逻辑。这个旧逻辑会导致所有未录入字被错误判为 3 笔。
+- 不要用 `STKaiti` / `KaiTi` / 普通 DOM 文本作为田字格内标准字的主渲染路径。系统字体与 Hanzi Writer 坐标不一致，会出现偏移；代码中保留的字体绘制只能作为缺少 Hanzi Writer median 时的兜底。
+- 不要在 Hanzi Writer 坐标变换里随意加垂直偏移。曾经的 `+ 66 * scale` 会让笔顺页字形偏下。
+- 如果修改 `withHanziTransform()`，必须同时检查练习页和笔顺页同一个字在田字格里的位置。
+- 远程 CDN 只能作为补充；iPad 离线能力依赖 `data/` 本地 JSON。
+- 本地 Python `http.server` 偶发出现 `ERR_EMPTY_RESPONSE`，遇到空响应先重启服务再判断页面问题。
+
+## 推荐验证路径
+
+每次改书写、笔顺或字形位置后，至少检查：
+
+```text
+http://127.0.0.1:4173/index.html?view=practice&chars=牛
+http://127.0.0.1:4173/index.html?view=animation&char=牛
+http://127.0.0.1:4173/index.html?view=practice&chars=输
+http://127.0.0.1:4173/index.html?view=animation&char=输
+http://127.0.0.1:4173/index.html?view=practice&chars=学习
+```
+
+重点看：
+
+- 练习页和笔顺页同字位置、大小是否一致。
+- 标准字是否居中，是否偏右、偏下。
+- 笔顺动画是否一笔一划，不是一片片遮罩或残缺覆盖。
+- “输”等复杂字是否显示真实笔画数。
+- 提交后逐笔反馈是否停留，是否需要点击“下一个”才继续。
+
 ## 已知开发环境
 
 - 本机项目路径：`/Users/chenzhuo/Documents/Codex/小学生字练习`
@@ -60,4 +102,3 @@ http://127.0.0.1:4173/index.html?view=animation&char=输
 ## 给后续 Codex 的提醒
 
 用户希望换电脑后能继续开发，不想重复讲背景。请优先从这些文档和 Git 历史恢复上下文，不要假设聊天历史一定可用。若要做较大改动，先简短说明你读到的项目状态，再继续实现。
-
