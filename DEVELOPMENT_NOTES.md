@@ -167,11 +167,11 @@ git config core.sshCommand "ssh -o StrictHostKeyChecking=accept-new -o ProxyComm
 请先阅读 README.md、AGENTS.md、DEVELOPMENT_NOTES.md，然后继续开发。
 ```
 
-### 自动化收尾流程
+### 自动化版本提交流程
 
-已新增项目级收尾约定：
+已新增项目级版本提交约定：
 
-- 触发语：`项目收尾`、`收尾并同步`、`帮我收尾` 或同义短句。
+- 触发语：`版本提交` 或同义短句。
 - Codex 需要先提炼本轮会话和代码改动，更新 `README.md`、`AGENTS.md`、`DEVELOPMENT_NOTES.md`。
 - 然后运行 `./scripts/finalize.sh "Commit message"`。
 - 脚本负责：

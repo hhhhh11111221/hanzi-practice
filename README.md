@@ -98,15 +98,15 @@ git status --short --branch
 snapshot-20260527-1146
 ```
 
-## 项目收尾
+## 版本提交
 
 开发结束后，可以直接对 Codex 说：
 
 ```text
-项目收尾
+版本提交
 ```
 
-Codex 会按 `AGENTS.md` 的收尾流程，先把本轮会话中的重要决策、踩坑、修复和后续计划更新到 `README.md`、`AGENTS.md`、`DEVELOPMENT_NOTES.md`，再运行脚本提交、打标签并推送。
+Codex 会按 `AGENTS.md` 的版本提交流程，先把本轮会话中的重要决策、踩坑、修复和后续计划更新到 `README.md`、`AGENTS.md`、`DEVELOPMENT_NOTES.md`，再运行脚本提交、打标签并推送。
 
 手动运行机械收尾脚本：
 

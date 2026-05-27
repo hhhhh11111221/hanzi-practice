@@ -23,9 +23,9 @@
 - 数据文件名使用汉字，例如 `data/学.json`；不要把这些文件名转成拼音或 ASCII。
 - `.gitignore` 已忽略 `.DS_Store`、`node_modules/`、`.env*`、`dist/`、`build/`，不要提交密钥或本机缓存。
 
-## 收尾触发指令
+## 版本提交触发指令
 
-当用户说“项目收尾”、“收尾并同步”、“帮我收尾”或意思相近的简短指令时，Codex 必须自动执行本节流程。
+当用户说“版本提交”或意思相近的简短指令时，Codex 必须自动执行本节流程。
 
 1. 运行 `git status --short --branch`，查看当前改动。
 2. 阅读 `README.md`、`AGENTS.md`、`DEVELOPMENT_NOTES.md`，恢复项目背景。
