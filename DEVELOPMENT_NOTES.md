@@ -166,3 +166,19 @@ git config core.sshCommand "ssh -o StrictHostKeyChecking=accept-new -o ProxyComm
 ```text
 请先阅读 README.md、AGENTS.md、DEVELOPMENT_NOTES.md，然后继续开发。
 ```
+
+### 自动化收尾流程
+
+已新增项目级收尾约定：
+
+- 触发语：`项目收尾`、`收尾并同步`、`帮我收尾` 或同义短句。
+- Codex 需要先提炼本轮会话和代码改动，更新 `README.md`、`AGENTS.md`、`DEVELOPMENT_NOTES.md`。
+- 然后运行 `./scripts/finalize.sh "Commit message"`。
+- 脚本负责：
+  - 检查可能误提交的密钥文件。
+  - `git add -A`
+  - 创建提交。
+  - 创建 `snapshot-YYYYMMDD-HHMM` 标签。
+  - 推送分支和标签到 GitHub。
+
+注意：脚本不能自动读取聊天内容，必须由 Codex 在运行脚本前完成文档提炼。

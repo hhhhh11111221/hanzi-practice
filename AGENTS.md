@@ -23,6 +23,23 @@
 - 数据文件名使用汉字，例如 `data/学.json`；不要把这些文件名转成拼音或 ASCII。
 - `.gitignore` 已忽略 `.DS_Store`、`node_modules/`、`.env*`、`dist/`、`build/`，不要提交密钥或本机缓存。
 
+## 收尾触发指令
+
+当用户说“项目收尾”、“收尾并同步”、“帮我收尾”或意思相近的简短指令时，Codex 必须自动执行本节流程。
+
+1. 运行 `git status --short --branch`，查看当前改动。
+2. 阅读 `README.md`、`AGENTS.md`、`DEVELOPMENT_NOTES.md`，恢复项目背景。
+3. 总结本轮会话和代码改动，把重要内容写入项目文档：
+   - `README.md`：只更新运行方式、项目结构、用户需要知道的变化。
+   - `AGENTS.md`：更新给后续 Codex 的开发约定、高风险区域、验证路径、不要重复犯的坑。
+   - `DEVELOPMENT_NOTES.md`：追加今天的开发记录、已修复问题、踩坑、当前技术状态、未来计划。
+4. 检查是否有 `.env`、私钥、token、本机缓存、临时截图等不应提交的内容。
+5. 根据改动风险做必要验证；若无法验证，要在最终回复里说明。
+6. 运行 `./scripts/finalize.sh "Commit message"` 完成提交、创建 `snapshot-YYYYMMDD-HHMM` 标签并推送。
+7. 最终回复必须包含提交号、标签名、`git status --short --branch` 结果、是否推送成功。
+
+不要跳过第 3 步。脚本只能提交、打标签和推送，不能替代 Codex 对会话内容的提炼。
+
 ## 产品与实现决策
 
 - 主要目标设备是 iPad + Apple Pencil，所有书写交互优先考虑触控、低延迟和 HiDPI canvas 清晰度。
